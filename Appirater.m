@@ -2,6 +2,7 @@
  This file is part of Appirater.
  
  Copyright (c) 2010, Arash Payan
+ Copyright (c) 2010, Chris Miles
  All rights reserved.
  
  Permission is hereby granted, free of charge, to any person
@@ -32,6 +33,7 @@
  * Created by Arash Payan on 9/5/09.
  * http://arashpayan.com
  * Copyright 2010 Arash Payan. All rights reserved.
+ * Modifications by Chris Miles, 2010.
  */
 
 #import "Appirater.h"
@@ -78,9 +80,12 @@ NSString *templateReviewURL = @"itms-apps://itunes.apple.com/WebObjects/MZStore.
 	
 	NSURL *testURL = [NSURL URLWithString:@"http://www.apple.com/"];
 	NSURLRequest *testRequest = [NSURLRequest requestWithURL:testURL  cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:20.0];
-	NSURLConnection *testConnection = [[NSURLConnection alloc] initWithRequest:testRequest delegate:self];
+	NSURLConnection *testConnection = [[NSURLConnection alloc] initWithRequest:testRequest delegate:nil];
+	BOOL connectionCanBeInitialised = (testConnection ? YES : NO);
+	[testConnection cancel];
+	[testConnection release];
 	
-    return ((isReachable && !needsConnection) || nonWiFi) ? (testConnection ? YES : NO) : NO;
+    return ((isReachable && !needsConnection) || nonWiFi) ? connectionCanBeInitialised : NO;
 }
 
 @end
@@ -88,8 +93,10 @@ NSString *templateReviewURL = @"itms-apps://itunes.apple.com/WebObjects/MZStore.
 
 @implementation Appirater
 
+@synthesize currentAlertView;
+
 + (void)appLaunched {
-	Appirater *appirater = [[Appirater alloc] init];
+	Appirater *appirater = [[[Appirater alloc] init] autorelease];
 	[NSThread detachNewThreadSelector:@selector(_appLaunched) toTarget:appirater withObject:nil];
 }
 
@@ -98,80 +105,75 @@ NSString *templateReviewURL = @"itms-apps://itunes.apple.com/WebObjects/MZStore.
 	
 	if (APPIRATER_DEBUG)
 	{
-		[self performSelectorOnMainThread:@selector(showPrompt) withObject:nil waitUntilDone:NO];
+		[self performSelectorOnMainThread:@selector(showPrompt) withObject:nil waitUntilDone:YES];
+	}
+	else {
+	
+		// get the app's version
+		NSString *version = [[[NSBundle mainBundle] infoDictionary] objectForKey:(NSString*)kCFBundleVersionKey];
 		
-		return;
-	}
-	
-	BOOL willShowPrompt = NO;
-	
-	// get the app's version
-	NSString *version = [[[NSBundle mainBundle] infoDictionary] objectForKey:(NSString*)kCFBundleVersionKey];
-	
-	// get the version number that we've been tracking
-	NSUserDefaults *userDefaults = [NSUserDefaults standardUserDefaults];
-	NSString *trackingVersion = [userDefaults stringForKey:kAppiraterCurrentVersion];
-	if (trackingVersion == nil)
-	{
-		trackingVersion = version;
-		[userDefaults setObject:version forKey:kAppiraterCurrentVersion];
-	}
-	
-	if (APPIRATER_DEBUG)
-		NSLog(@"APPIRATER Tracking version: %@", trackingVersion);
-	
-	if ([trackingVersion isEqualToString:version])
-	{
-		// get the launch date
-		NSTimeInterval timeInterval = [userDefaults doubleForKey:kAppiraterLaunchDate];
-		if (timeInterval == 0)
+		// get the version number that we've been tracking
+		NSUserDefaults *userDefaults = [NSUserDefaults standardUserDefaults];
+		NSString *trackingVersion = [userDefaults stringForKey:kAppiraterCurrentVersion];
+		if (trackingVersion == nil)
 		{
-			timeInterval = [[NSDate date] timeIntervalSince1970];
-			[userDefaults setDouble:timeInterval forKey:kAppiraterLaunchDate];
+			trackingVersion = version;
+			[userDefaults setObject:version forKey:kAppiraterCurrentVersion];
 		}
 		
-		NSTimeInterval secondsSinceLaunch = [[NSDate date] timeIntervalSinceDate:[NSDate dateWithTimeIntervalSince1970:timeInterval]];
-		double secondsUntilPrompt = 60 * 60 * 24 * DAYS_UNTIL_PROMPT;
-		
-		// get the launch count
-		int launchCount = [userDefaults integerForKey:kAppiraterLaunchCount];
-		launchCount++;
-		[userDefaults setInteger:launchCount forKey:kAppiraterLaunchCount];
 		if (APPIRATER_DEBUG)
-			NSLog(@"APPIRATER Launch count: %d", launchCount);
+			NSLog(@"APPIRATER Tracking version: %@", trackingVersion);
 		
-		// have they previously declined to rate this version of the app?
-		BOOL declinedToRate = [userDefaults boolForKey:kAppiraterDeclinedToRate];
-		
-		// have they already rated the app?
-		BOOL ratedApp = [userDefaults boolForKey:kAppiraterRatedCurrentVersion];
-		
-		if (secondsSinceLaunch > secondsUntilPrompt &&
-			launchCount > LAUNCHES_UNTIL_PROMPT &&
-			!declinedToRate &&
-			!ratedApp)
+		if ([trackingVersion isEqualToString:version])
 		{
-			if ([self connectedToNetwork])	// check if they can reach the app store
+			// get the launch date
+			NSTimeInterval timeInterval = [userDefaults doubleForKey:kAppiraterLaunchDate];
+			if (timeInterval == 0)
 			{
-				willShowPrompt = YES;
-				[self performSelectorOnMainThread:@selector(showPrompt) withObject:nil waitUntilDone:NO];
+				timeInterval = [[NSDate date] timeIntervalSince1970];
+				[userDefaults setDouble:timeInterval forKey:kAppiraterLaunchDate];
+			}
+			
+			NSTimeInterval secondsSinceLaunch = [[NSDate date] timeIntervalSinceDate:[NSDate dateWithTimeIntervalSince1970:timeInterval]];
+			double secondsUntilPrompt = 60 * 60 * 24 * DAYS_UNTIL_PROMPT;
+			
+			// get the launch count
+			int launchCount = [userDefaults integerForKey:kAppiraterLaunchCount];
+			launchCount++;
+			[userDefaults setInteger:launchCount forKey:kAppiraterLaunchCount];
+			if (APPIRATER_DEBUG)
+				NSLog(@"APPIRATER Launch count: %d", launchCount);
+			
+			// have they previously declined to rate this version of the app?
+			BOOL declinedToRate = [userDefaults boolForKey:kAppiraterDeclinedToRate];
+			
+			// have they already rated the app?
+			BOOL ratedApp = [userDefaults boolForKey:kAppiraterRatedCurrentVersion];
+			
+			if (secondsSinceLaunch > secondsUntilPrompt &&
+				launchCount > LAUNCHES_UNTIL_PROMPT &&
+				!declinedToRate &&
+				!ratedApp)
+			{
+				if ([self connectedToNetwork])	// check if they can reach the app store
+				{
+					[self performSelectorOnMainThread:@selector(showPrompt) withObject:nil waitUntilDone:YES];
+				}
 			}
 		}
-	}
-	else
-	{
-		// it's a new version of the app, so restart tracking
-		[userDefaults setObject:version forKey:kAppiraterCurrentVersion];
-		[userDefaults setDouble:[[NSDate date] timeIntervalSince1970] forKey:kAppiraterLaunchDate];
-		[userDefaults setInteger:1 forKey:kAppiraterLaunchCount];
-		[userDefaults setBool:NO forKey:kAppiraterRatedCurrentVersion];
-		[userDefaults setBool:NO forKey:kAppiraterDeclinedToRate];
-	}
+		else
+		{
+			// it's a new version of the app, so restart tracking
+			[userDefaults setObject:version forKey:kAppiraterCurrentVersion];
+			[userDefaults setDouble:[[NSDate date] timeIntervalSince1970] forKey:kAppiraterLaunchDate];
+			[userDefaults setInteger:1 forKey:kAppiraterLaunchCount];
+			[userDefaults setBool:NO forKey:kAppiraterRatedCurrentVersion];
+			[userDefaults setBool:NO forKey:kAppiraterDeclinedToRate];
+		}
 
-	
-	[userDefaults synchronize];
-	if (!willShowPrompt)
-		[self autorelease];
+		
+		[userDefaults synchronize];
+	}
 	
 	[pool release];
 }
@@ -183,6 +185,9 @@ NSString *templateReviewURL = @"itms-apps://itunes.apple.com/WebObjects/MZStore.
 											  cancelButtonTitle:APPIRATER_CANCEL_BUTTON
 											  otherButtonTitles:APPIRATER_RATE_BUTTON, APPIRATER_RATE_LATER, nil];
 	[alertView show];
+	self.currentAlertView = alertView;
+	[alertView release];
+	[self retain];
 }
 
 - (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex {
@@ -198,10 +203,10 @@ NSString *templateReviewURL = @"itms-apps://itunes.apple.com/WebObjects/MZStore.
 		case 1:
 		{
 			// they want to rate it
+			[userDefaults setBool:YES forKey:kAppiraterRatedCurrentVersion];
+			
 			NSString *reviewURL = [templateReviewURL stringByReplacingOccurrencesOfString:@"APP_ID" withString:[NSString stringWithFormat:@"%d", APPIRATER_APP_ID]];
 			[[UIApplication sharedApplication] openURL:[NSURL URLWithString:reviewURL]];
-			
-			[userDefaults setBool:YES forKey:kAppiraterRatedCurrentVersion];
 			break;
 		}
 		case 2:
@@ -213,8 +218,14 @@ NSString *templateReviewURL = @"itms-apps://itunes.apple.com/WebObjects/MZStore.
 	
 	[userDefaults synchronize];
 	
-	[alertView release];
+	self.currentAlertView = nil;
 	[self release];
+}
+
+- (void)dealloc {
+	[currentAlertView release];
+	
+	[super dealloc];
 }
 
 @end

@@ -2,6 +2,7 @@
  This file is part of Appirater.
  
  Copyright (c) 2010, Arash Payan
+ Copyright (c) 2010, Chris Miles
  All rights reserved.
  
  Permission is hereby granted, free of charge, to any person
@@ -32,6 +33,7 @@
  * Created by Arash Payan on 9/5/09.
  * http://arashpayan.com
  * Copyright 2010 Arash Payan. All rights reserved.
+ * Modifications by Chris Miles, 2010.
  */
 
 #import <Foundation/Foundation.h>
@@ -45,7 +47,7 @@ extern NSString *const kAppiraterDeclinedToRate;
 /*
  Place your Apple generated software id here.
  */
-#define APPIRATER_APP_ID				301377083
+#define APPIRATER_APP_ID				312345678
 
 /*
  Your app's name.
@@ -97,8 +99,10 @@ extern NSString *const kAppiraterDeclinedToRate;
 #define APPIRATER_DEBUG				NO
 
 @interface Appirater : NSObject <UIAlertViewDelegate> {
-
+	UIAlertView		*currentAlertView;
 }
+
+@property (nonatomic, retain)	UIAlertView		*currentAlertView;
 
 + (void)appLaunched;
 
